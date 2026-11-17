@@ -38,6 +38,25 @@
     if (!hits.length) return null;
     return int32(bytes, hits[0] + needle.length);
   }
+  // Byte range of a top-level property's value (e.g. an ArrayProperty), or null.
+  function propSlice(bytes, name) {
+    const k = asciiBytes(name), needle = new Uint8Array(k.length + 5), len = k.length + 1;
+    needle[0] = len & 0xff; needle[1] = (len >> 8) & 0xff; needle.set(k, 4);
+    const hits = findAll(bytes, needle);
+    if (!hits.length) return null;
+    let p = hits[0] + needle.length;
+    const tlen = int32(bytes, p); p += 4;
+    let type = ''; for (let i = 0; i < tlen - 1; i++) type += String.fromCharCode(bytes[p + i]); p += tlen;
+    const size = int32(bytes, p); p += 8;
+    if (type === 'ArrayProperty' || type === 'SetProperty') { const il = int32(bytes, p); p += 4 + il; }
+    p += 1; // property GUID flag
+    return [p, p + size];
+  }
+  function lowerText(bytes, a, b) {
+    let s = '';
+    for (let i = a; i < b; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(b, i + 8192)));
+    return s.toLowerCase();
+  }
   function check(bytes) {
     const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
     if (magic !== 'GVAS') return 'This is not an Unreal Engine save file.';
@@ -45,7 +64,7 @@
       return 'This save has no world data. Pick World0.sav (not System0.sav or Challenges).';
     return null;
   }
-  function analyze(bytes, items) {
+  function analyze(bytes, items, pois) {
     const err = check(bytes);
     if (err) return { error: err };
     const results = items.map(function (it) {
@@ -59,9 +78,21 @@
       skullRewards: namedInt(bytes, 'SkullDoorRewardCount'),
       modulesGiven: namedInt(bytes, 'ScientistDataGiven'),
       skullsCarried: namedInt(bytes, '/Game/Items/KeyItems/SecretRelicKey/SkullKeyRelic_Data.SkullKeyRelic_Data'),
-      eggsCarried: namedInt(bytes, '/Game/Items/KeyItems/Egg/FishWifeEgg.FishWifeEgg')
+      eggsCarried: namedInt(bytes, '/Game/Items/KeyItems/Egg/FishWifeEgg.FishWifeEgg'),
+      chestsOpened: namedInt(bytes, 'TotalChestsOpened'),
+      secretsOpened: namedInt(bytes, 'TotalSecretDoorsOpened'),
+      mealTickets: namedInt(bytes, 'MealTicketsCollected')
     };
-    return { items: results, counters: counters };
+    const lists = {};
+    for (const [kind, prop] of [['teleporter', 'UnlockedTeleporters'], ['save', 'SavePointsVisited']]) {
+      const r = propSlice(bytes, prop);
+      lists[kind] = r ? lowerText(bytes, r[0], r[1]) : null;
+    }
+    const poiResults = (pois || []).map(function (p) {
+      const txt = lists[p.kind];
+      return Object.assign({}, p, { have: txt === null ? null : txt.indexOf(p.path.toLowerCase()) !== -1 });
+    });
+    return { items: results, counters: counters, pois: poiResults };
   }
   const api = { analyze: analyze, namedInt: namedInt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
