@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M8 1l6 7-6 7-6-7z%22 fill=%22%23ffa31a%22/%3E%3C/svg%3E">
+<title>Queen's Domain – Missing Collectibles Finder</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #2b303b; --text: #e7e9ee; --muted: #9aa1ae;
+    --egg: #ff3b3b; --skull: #ffa31a; --module: #39d0ff; --ok: #6fdc8c; --accent: #c9a2ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  header { padding: 28px 24px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .2px; }
+  h2 { font-size: 18px; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0; }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 24px 48px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; }
+  .drop { display: block; border: 2px dashed #3a4150; border-radius: 12px; padding: 26px; text-align: center; cursor: pointer; transition: .15s; background: var(--panel2); }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #232733; }
+  .drop strong { font-size: 17px; }
+  .drop input { display: none; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .status { margin-top: 12px; font-size: 14px; }
+  .status.err { color: #ff8a8a; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card .big { font-size: 28px; font-weight: 700; }
+  .card .lab { color: var(--muted); font-size: 13px; }
+  .card .note { font-size: 13px; margin-top: 6px; }
+  .done { color: var(--ok); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .k-egg { background: var(--egg); } .k-skull { background: var(--skull); transform: rotate(45deg); border-radius: 2px; } .k-module { background: var(--module); border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  tr.row { cursor: pointer; } tr.row:hover td { background: #222733; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .tab { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 6px 10px; border-radius: 999px; cursor: pointer; font-size: 13px; }
+  .tab.on { border-color: var(--accent); background: #2a2340; }
+  .subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+  .subtabs .tab { font-size: 12px; padding: 4px 9px; background: transparent; }
+  .subtabs .tab.on { background: #2a2340; }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--egg); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
+  .badge.zero { background: #3a4150; color: var(--muted); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+  .toolbar button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  .viewer { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--line); background: #0b0d10; cursor: grab; touch-action: none; }
+  .viewer.grab { cursor: grabbing; }
+  .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .stage img { display: block; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+  .pin { position: absolute; transform: translate(-50%, -50%) scale(var(--inv, 1)); pointer-events: auto; }
+  .pin i { display: block; border: 2px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
+  .pin.miss i { width: 18px; height: 18px; }
+  .pin.miss.egg i { background: var(--egg); border-radius: 50%; }
+  .pin.miss.skull i { background: var(--skull); transform: rotate(45deg); width: 15px; height: 15px; }
+  .pin.miss.module i { background: var(--module); width: 15px; height: 15px; border-radius: 3px; }
+  .pin.miss::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7); animation: pulse 1.6s infinite; pointer-events: none; }
+  @keyframes pulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+  .pin.have i { width: 9px; height: 9px; background: transparent; border: 1.5px solid #e9e9e9; box-shadow: none; opacity: .8; }
+  .pin.have.egg i { border-radius: 50%; } .pin.have.skull i { transform: rotate(45deg); } .pin.have.module i { border-radius: 2px; }
+  .pin.unknown i { width: 10px; height: 10px; border: 1.5px solid #fff; box-shadow: none; }
+  .pin.unknown.egg i { background: var(--egg); border-radius: 50%; } .pin.unknown.skull i { background: var(--skull); transform: rotate(45deg); } .pin.unknown.module i { background: var(--module); border-radius: 2px; }
+  .pin.hl i { outline: 3px solid #fff; outline-offset: 3px; }
+  .tip { position: fixed; z-index: 10; pointer-events: none; background: rgba(12,14,18,.95); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; display: none; max-width: 260px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 10px; align-items: center; }
+  .grad { display: inline-block; width: 120px; height: 10px; border-radius: 3px; vertical-align: middle; margin: 0 6px; background: linear-gradient(to right, #440154, #3b528b, #21918c, #5ec962, #fde725); }
+  .water { display: inline-block; width: 12px; height: 12px; background: #2b5d8a; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+  .muted { color: var(--muted); }
+  .hidden { display: none; }
+  footer { max-width: 1200px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 13px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Queen's Domain – Missing Collectibles Finder</h1>
+  <p class="sub">Load your <code>World0.sav</code> and see which Orbewa Eggs, Silver Skulls and Data Modules you haven't picked up yet, and where they are.</p>
+</header>
+<main>
+  <section>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".sav" multiple>
+      <strong>Drop your World0.sav here, or click to choose it</strong>
+      <div class="hint">The file is read in your browser and never uploaded. Backups such as <code>World0_backup.sav</code> work too.</div>
+    </label>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section id="summary" class="hidden">
+    <h2>Progress</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="missing" class="hidden">
+    <h2>Missing items</h2>
+    <p class="muted" id="missingNote" style="margin-top:-6px"></p>
+    <table><thead><tr><th>Item</th><th>Area</th><th>Height</th><th>Part</th></tr></thead><tbody id="missingBody"></tbody></table>
+  </section>
+
+  <section>
+    <h2>Area map</h2>
+    <div class="tabs" id="tabs"></div>
+    <div class="subtabs" id="subtabs"></div>
+    <div class="toolbar">
+      <label><input type="checkbox" id="showHave" checked> Show collected items</label>
+      <button id="zoomInA">+</button><button id="zoomOutA">−</button><button id="resetArea">Reset view</button>
+      <span>Scroll to zoom, drag to pan. Hover a pin for details.</span>
+    </div>
+    <div class="viewer" id="areaViewer" style="height:72vh"></div>
+    <div class="legend" id="areaLegend"></div>
+  </section>
+
+  <section>
+    <h2>Whole world (isometric)</h2>
+    <p class="muted" style="margin-top:-6px">All areas stacked by depth, deepest at the bottom. Each area keeps its true position; dashed lines mark where two areas physically meet.</p>
+    <div class="toolbar"><button id="zoomInW">+</button><button id="zoomOutW">−</button><button id="resetWorld">Reset view</button><span>Click a pin to open its area map.</span></div>
+    <div class="viewer" id="worldViewer" style="height:80vh"></div>
+  </section>
+</main>
+<footer>
+  <details>
+    <summary>How this works</summary>
+    <p>Every egg, skull and data module placed in the game has a unique save ID. When you pick one up, the game records that ID in <code>World0.sav</code>. This page searches your save for all 129 IDs; any ID that isn't recorded is an item you haven't collected. The maps were drawn from the game's own level geometry: only floors and ledges are shown, coloured by height, and where floors overlap the higher one is drawn on top. Map "north" follows the level editor's top view, which may not match the in-game camera. Area borders were grouped by hand and may not match the game's area names exactly.</p>
+    <p>Totals: 50 Orbewa Eggs (hand in to Erma), 69 Silver Skulls (skull door under the Petrified Garden), 10 Data Modules (hand in to Ossi).</p>
+  </details>
+  <p>Fan-made tool, not affiliated with the developers of Queen's Domain.</p>
+</footer>
+<div class="tip" id="tip"></div>
+
+<script src="qd.js"></script>
+<script>
+const ITEMS = [{"kind":"egg","map":"100_GR","region":"Isle of Neasied","guid":"966a9b0c626c5a41b3b6eb717523cf03","x":19193,"y":4395,"z":1661},{"kind":"egg","map":"100_GR","region":"Isle of Neasied","guid":"c510bf75982a9a45bcf182a76c2eb5f0","x":15285,"y":7560,"z":5244},{"kind":"egg","map":"100_GR","region":"Isle of Neasied","guid":"dbbd4529777c9f42b54ac7c35ac00395","x":11126,"y":14329,"z":1004},{"kind":"egg","map":"100_GR","region":"Isle of Neasied","guid":"6ad052c5a64218478a5c054bccdbccd5","x":6995,"y":4258,"z":4788},{"kind":"skull","map":"100_GR","region":"Isle of Neasied","guid":"5c425315a044e2469436b70a97d0f51a","x":9729,"y":-4514,"z":6114},{"kind":"skull","map":"100_GR","region":"Isle of Neasied","guid":"6e0a55c2b790f241bd1dac6873a6a823","x":10419,"y":10309,"z":5975},{"kind":"skull","map":"100_GR","region":"Isle of Neasied","guid":"f96cf0e3e87eed478cd052a3394487c2","x":3298,"y":4261,"z":5661},{"kind":"skull","map":"100_GR","region":"Isle of Neasied","guid":"f1323051431cb9468ae88037eef9469b","x":21566,"y":-9999,"z":1410},{"kind":"skull","map":"100_GR","region":"Isle of Neasied","guid":"6c2ca80586725645b99e7472a96e97c7","x":11986,"y":5219,"z":7726},{"kind":"module","map":"100_GR","region":"Isle of Neasied","guid":"383da32d595028488dbd5ea959171485","x":13974,"y":7147,"z":2743,"n":1},{"kind":"egg","map":"130_GR_outerisles","region":"Isle of Neasied","guid":"0579174bca1ba3498ea92a0c5ef2f3be","x":-14950,"y":13219,"z":4422},{"kind":"egg","map":"130_GR_outerisles","region":"Isle of Neasied","guid":"faf60b8df64f0b45872b81cb50719c23","x":-12764,"y":12813,"z":-7557},{"kind":"skull","map":"130_GR_outerisles","region":"Isle of Neasied","guid":"ddc02ff3981882488df80b92abe788c7","x":-11648,"y":12874,"z":4244},{"kind":"skull","map":"130_GR_outerisles","region":"Isle of Neasied","guid":"c37acc9a86a22f4197a8a3274f63ee00","x":-23444,"y":21315,"z":2147},{"kind":"skull","map":"140_GR_ShopIsleOnly","region":"Isle of Neasied","guid":"16a6f8a25f757647af85185ffe97c4f1","x":6822,"y":46220,"z":2348},{"kind":"egg","map":"200_AQ","region":"Obmuer Temple","guid":"31054144c8c8174482af18dccc82ef20","x":-12124,"y":-16882,"z":2104},{"kind":"egg","map":"200_AQ","region":"Obmuer Temple","guid":"4933cad0f5684b4caa736481a68b1c9e","x":-15163,"y":-26146,"z":3256},{"kind":"egg","map":"200_AQ","region":"Obmuer Temple","guid":"09dcc6f73b3dc744a55debdb8d4b39b3","x":439,"y":-14398,"z":2764},{"kind":"skull","map":"200_AQ","region":"Obmuer Temple","guid":"2833779c500487418ba6fea9b5f93960","x":-4156,"y":-7803,"z":1943},{"kind":"egg","map":"210_AQ_underground","region":"Obmuer Temple","guid":"31bf95ca37de8f45b6ae46385f750e93","x":-5389,"y":-24288,"z":-3642},{"kind":"egg","map":"210_AQ_underground","region":"Obmuer Temple","guid":"1595fa5eab9f024badf145bf157684da","x":-8280,"y":-8278,"z":-3626},{"kind":"skull","map":"210_AQ_underground","region":"Obmuer Temple","guid":"747b393e70ba494a91e7f71deb194eb3","x":1722,"y":-14348,"z":-5001},{"kind":"skull","map":"210_AQ_underground","region":"Obmuer Temple","guid":"fb0243049b373f48a68032cc0ea0f555","x":-14143,"y":-12604,"z":-2950},{"kind":"skull","map":"210_AQ_underground","region":"Obmuer Temple","guid":"9b087a274412294b83136ba2913811b3","x":-3500,"y":-21261,"z":-3900},{"kind":"skull","map":"210_AQ_underground","region":"Obmuer Temple","guid":"9b75ffae3c13dd43b734c9958b695669","x":1075,"y":-34710,"z":-3796},{"kind":"module","map":"210_AQ_underground","region":"Obmuer Temple","guid":"db077ad41304e542a194509bf3db247d","x":-6653,"y":-24943,"z":-3403,"n":2},{"kind":"egg","map":"300_LIB","region":"Tower of Knowledge","guid":"ed247af86757de44be5452fa33a4c807","x":28505,"y":-1291,"z":10893},{"kind":"egg","map":"300_LIB","region":"Tower of Knowledge","guid":"64cf1499df7f2a49b076891f9455532d","x":27574,"y":-1532,"z":4515},{"kind":"egg","map":"300_LIB","region":"Tower of Knowledge","guid":"88efa45b11befd4e9df35daab7763714","x":23112,"y":15,"z":1271},{"kind":"egg","map":"300_LIB","region":"Tower of Knowledge","guid":"7801671c7300414284d12e530b878bec","x":27520,"y":3830,"z":3693},{"kind":"module","map":"300_LIB","region":"Tower of Knowledge","guid":"6f90adc2ba3c1441ac1af3b4aa1d6404","x":28056,"y":-2114,"z":10933,"n":3},{"kind":"egg","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"1689f0c30112f249aaeae4f9eb7f4c76","x":22527,"y":-909,"z":12968},{"kind":"egg","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"433f629900cdae44baabcfd21f73a53e","x":27675,"y":4463,"z":1630},{"kind":"skull","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"94d51701420b704c8a3c15a34d2a7351","x":26807,"y":4644,"z":14629},{"kind":"skull","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"44f85aa3645ff74fb092ecb48d6fc329","x":30291,"y":-3662,"z":6804},{"kind":"skull","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"316e6e156ca60d4bb3561611c39dcdba","x":23914,"y":3441,"z":7899},{"kind":"skull","map":"310_LIB_exterior","region":"Tower of Knowledge","guid":"8eb3f20b93418d449a8b7ef74d71b4d8","x":26141,"y":861,"z":21012},{"kind":"skull","map":"320_LIB_basement","region":"Tower of Knowledge","guid":"e036d06df3391b4595be0102de3b6d40","x":24008,"y":1192,"z":241},{"kind":"egg","map":"400_MAUS_entrance","region":"Deimpo Mausoleum","guid":"83902c46e8360148a7cd150158b4e342","x":11096,"y":13671,"z":-1889},{"kind":"egg","map":"400_MAUS_entrance","region":"Deimpo Mausoleum","guid":"b6c8e6633b00984ab90d8a3ca0ebb868","x":5554,"y":13693,"z":-2432},{"kind":"skull","map":"400_MAUS_entrance","region":"Deimpo Mausoleum","guid":"40858681f3de0e449981b023f36ab14c","x":6206,"y":13254,"z":-2525},{"kind":"egg","map":"420_MAUS_mid","region":"Deimpo Mausoleum","guid":"b36f34cfcdd7b34ca2dbd726e263849e","x":471,"y":16875,"z":-2955},{"kind":"skull","map":"420_MAUS_mid","region":"Deimpo Mausoleum","guid":"384521b1161f0a49afd40157d548c788","x":648,"y":25366,"z":-3050},{"kind":"skull","map":"420_MAUS_mid","region":"Deimpo Mausoleum","guid":"6b350822ea349441bc2585560e26b994","x":6890,"y":18846,"z":-6990},{"kind":"module","map":"420_MAUS_mid","region":"Deimpo Mausoleum","guid":"49bf9debd2c2d9419edf7037a1b0c825","x":5255,"y":23472,"z":-4452,"n":4},{"kind":"egg","map":"450_MAUS_darkmaze","region":"Deimpo Mausoleum","guid":"14e7ea1d37947d4b802a4283bb61d9a2","x":-12242,"y":32773,"z":-8015},{"kind":"egg","map":"450_MAUS_darkmaze","region":"Deimpo Mausoleum","guid":"bff03bd251c63946b9e057265885fdc3","x":-5108,"y":41506,"z":-7341},{"kind":"egg","map":"450_MAUS_darkmaze","region":"Deimpo Mausoleum","guid":"6802b7a7c8e2594aab913b450774b7e1","x":-11670,"y":19471,"z":-7316},{"kind":"skull","map":"450_MAUS_darkmaze","region":"Deimpo Mausoleum","guid":"4c21f8040ac6434eb33a1fb905fcd9f1","x":-18087,"y":17674,"z":-7990},{"kind":"skull","map":"450_MAUS_darkmaze","region":"Deimpo Mausoleum","guid":"4c24b1a88bd32440abe27ec3f8c30899","x":-12940,"y":14413,"z":-8165},{"kind":"egg","map":"500_AUT","region":"Ancient World","guid":"9eaf567e8908a041895ee7490d4f37c2","x":-51769,"y":57895,"z":-31869},{"kind":"egg","map":"500_AUT","region":"Ancient World","guid":"d2026aced98642448a10646cf6f51f46","x":-69572,"y":13230,"z":-33354},{"kind":"egg","map":"500_AUT","region":"Ancient World","guid":"3d26035572c3324ca694e16b16b24d66","x":-54355,"y":-3492,"z":-37987},{"kind":"egg","map":"500_AUT","region":"Ancient World","guid":"6269bf34bf15f54f8283c84f52928ce9","x":-20771,"y":25102,"z":-36156},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"c1ac6d87fdaa4e4e9c9ef838e3d0ee09","x":-58490,"y":-5777,"z":-36810},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"b36aebf09e8ef3488e4697c0d4c38a1b","x":-10993,"y":7072,"z":-33766},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"781a61378d542142ac5a960117467d3a","x":-24281,"y":-2901,"z":-29578},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"2701c29c30c77a40a1d022e05ea1e6b1","x":-46740,"y":60540,"z":-41950},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"4c219ea820648148b38f6ecaadbf64c0","x":-27759,"y":20693,"z":-37087},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"19194ebaa1b3a3499017ebc6580260e8","x":-63937,"y":13897,"z":-30814},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"c3ed423a0c1cf24dbe92603eb1e96cb2","x":-20444,"y":3518,"z":-28023},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"426472d980005042b35a447a59497898","x":-63212,"y":18527,"z":-30033},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"a97239960f456c46a7b5cd1c10ad8fd5","x":-85863,"y":14860,"z":-30622},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"bd4abd117854f642a5aa55c0aed99403","x":-60126,"y":20043,"z":-33579},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"0a49a3fabdcf524ca24ed56205901de0","x":-56185,"y":59515,"z":-29410},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"a9044e271c11d84ba3ab1abd7f1f0b67","x":-42242,"y":20952,"z":-34960},{"kind":"skull","map":"500_AUT","region":"Ancient World","guid":"c5b9c36851754b4898a038c14880faac","x":-53699,"y":9314,"z":-34234},{"kind":"module","map":"500_AUT","region":"Ancient World","guid":"8387e9c6fad95349b91de169d8f926ed","x":-28595,"y":17490,"z":-36516,"n":5},{"kind":"egg","map":"510_AUT_droptunnel","region":"Ancient World","guid":"d085df725da52d44930d14f1122142ef","x":-18109,"y":22417,"z":-17834},{"kind":"skull","map":"510_AUT_droptunnel","region":"Ancient World","guid":"6e128efccd8789428eb0c8c1f1db34bc","x":-22171,"y":22750,"z":-23823},{"kind":"skull","map":"510_AUT_droptunnel","region":"Ancient World","guid":"37b5339f626d4c4d95025cfeda32c4ea","x":-24238,"y":19006,"z":-15461},{"kind":"egg","map":"600_Castle","region":"Siraatsu Castle","guid":"843c620b7165c549bd8c5211535033be","x":-62834,"y":-19713,"z":-34960},{"kind":"egg","map":"600_Castle","region":"Siraatsu Castle","guid":"df597f4125c83f40bd96077099bde998","x":-58344,"y":-19365,"z":-39759},{"kind":"egg","map":"600_Castle","region":"Siraatsu Castle","guid":"6e5aaa66531a7c45a6ad06089134fd97","x":-41686,"y":-19474,"z":-36782},{"kind":"egg","map":"600_Castle","region":"Siraatsu Castle","guid":"d71be66d23ec674982ddcad6b9dfa520","x":-67147,"y":-23293,"z":-36781},{"kind":"skull","map":"600_Castle","region":"Siraatsu Castle","guid":"ba0fd1894855a44dab87dff598e88c73","x":-66876,"y":-23897,"z":-36208},{"kind":"skull","map":"600_Castle","region":"Siraatsu Castle","guid":"57e696a81da1234a8f5852c0ac18d076","x":-50695,"y":-22906,"z":-30529},{"kind":"skull","map":"600_Castle","region":"Siraatsu Castle","guid":"2609846bbcda4e478299a0147b494c60","x":-33022,"y":-22286,"z":-40459},{"kind":"skull","map":"600_Castle","region":"Siraatsu Castle","guid":"bb265247842a28439cdc723f95f36bfc","x":-45084,"y":-18098,"z":-38527},{"kind":"module","map":"600_Castle","region":"Siraatsu Castle","guid":"9afe814216bfce42af542ef4279782cc","x":-43950,"y":-19925,"z":-34890,"n":6},{"kind":"skull","map":"610_Castle_Ext","region":"Siraatsu Castle","guid":"c079aee0b9735a40924df073e6c0f257","x":-45499,"y":-29250,"z":-28237},{"kind":"skull","map":"610_Castle_Ext","region":"Siraatsu Castle","guid":"39ed124ba85f044586c6cf72651803c3","x":-70796,"y":-24750,"z":-30139},{"kind":"egg","map":"700_SZ_GR","region":"Hidden zones","guid":"c94977731b4ab542baceb1714247dc10","x":15931,"y":2763,"z":342},{"kind":"skull","map":"700_SZ_GR","region":"Hidden zones","guid":"90e2c9d75332d547865456431cc262b6","x":11711,"y":-1013,"z":-2251},{"kind":"skull","map":"700_SZ_GR","region":"Hidden zones","guid":"c0a45010fca35c44987218a30577fe00","x":12451,"y":-2241,"z":-1040},{"kind":"egg","map":"710_SZ_AQ","region":"Hidden zones","guid":"f2113e317b999d4ba7ab5d90fbbf8071","x":-9708,"y":-30437,"z":-3348},{"kind":"egg","map":"720_SZ_LIB","region":"Hidden zones","guid":"f1bc753bddd732428e01993219a28a20","x":22121,"y":905,"z":-683},{"kind":"skull","map":"720_SZ_LIB","region":"Hidden zones","guid":"6c0cff9d8890934f88522b5f53eca539","x":23486,"y":3114,"z":-3470},{"kind":"skull","map":"730_HOD","region":"Hidden zones","guid":"5eba32cb91a22f4ba8eecff70d68abdb","x":15367,"y":14131,"z":-7208},{"kind":"egg","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"3999e0da90a06d43b52a5b81af411e73","x":21802,"y":3506,"z":-6956},{"kind":"egg","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"c15ecd9c727edd4a923077a0f4ecbb43","x":17770,"y":2416,"z":-7522},{"kind":"egg","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"9c6d590b1d9cef438959cc57c9bf5bf7","x":18182,"y":9268,"z":-6114},{"kind":"skull","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"c0591d3cd719d54ea241b5f7f2219815","x":19315,"y":11987,"z":-7081},{"kind":"skull","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"a57d2b9e63153340a4fae5f6da259b2b","x":16911,"y":-2645,"z":-6071},{"kind":"skull","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"48189a12f6aec1489f2743388eb9e7ce","x":19889,"y":3648,"z":-6393},{"kind":"skull","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"9538c0f3b57db9439fd03f812e22a7a3","x":21864,"y":15084,"z":-7563},{"kind":"module","map":"740_SZ_Prison","region":"Forgotten Dungeon","guid":"ee67918059b39f47b697bceec42da9b2","x":17511,"y":6367,"z":-7522,"n":7},{"kind":"skull","map":"750_SZ_MAUS2","region":"Hidden zones","guid":"20b46fc194b20d4d8deed5bdcecda35a","x":-6415,"y":6430,"z":-9664},{"kind":"skull","map":"760_Dekanima","region":"Record of Sin","guid":"1c313f50f44ef54caf44f54f3a04e082","x":-620,"y":11402,"z":-10221},{"kind":"skull","map":"760_Dekanima","region":"Record of Sin","guid":"4a9b4cd73f27c44c8a85720999792136","x":1439,"y":7092,"z":-4014},{"kind":"egg","map":"760_SZ_AUT","region":"Record of Sin","guid":"c3964aef895bdd46b57ac471793c4e47","x":3535,"y":25433,"z":-39079},{"kind":"skull","map":"760_SZ_AUT","region":"Record of Sin","guid":"259ad0ca27683d47ac29f565ee05f004","x":2402,"y":13398,"z":-38579},{"kind":"module","map":"760_SZ_AUT","region":"Record of Sin","guid":"1dcd017bb9ce754190b2cfed7dce461b","x":2241,"y":14081,"z":-19263,"n":8},{"kind":"egg","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"670b4b883ad4e64cb7ae9b83ab0283de","x":-24563,"y":-28660,"z":-14534},{"kind":"egg","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"73bc83b70cfc2344b7e58ed3bb8e19cf","x":-27563,"y":-15393,"z":-13602},{"kind":"egg","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"ecf54ffd2a9fdd4abddf10fb1e3b081b","x":-9138,"y":-36846,"z":-12609},{"kind":"egg","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"86e5e5ee51fe134fb4f21fdb1aae97d2","x":-12467,"y":-26127,"z":-14467},{"kind":"skull","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"6440b5212315354c956fbd480520c275","x":-13262,"y":-22025,"z":-12494},{"kind":"skull","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"59710e0cdac953498bff33c80b47ee47","x":-1378,"y":-22041,"z":-13290},{"kind":"skull","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"38ebdac6a83e864cb9b9f729d2e69382","x":-29545,"y":-12763,"z":-13726},{"kind":"skull","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"6f6ffa95cc59c94fbaaccae0e1d358e7","x":-25781,"y":-25572,"z":-13083},{"kind":"skull","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"7c486661e282d147b8ab534e9b0b0c0c","x":-11312,"y":-28277,"z":-11747},{"kind":"module","map":"770_SZ_Swamp","region":"Rotting Cavern","guid":"8dfd73d5bf73d347879c63b5d5896c61","x":-30162,"y":-14149,"z":-15274,"n":10},{"kind":"egg","map":"775_JigekiTemple","region":"Verdant Hollow","guid":"40256ca6baf46d4d85d5e0c8b8eae28a","x":-11569,"y":-15480,"z":-13266},{"kind":"egg","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"f2e177104b658940aeb928521400961e","x":-2627,"y":-14111,"z":-15318},{"kind":"egg","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"7f2774a5c3003840af6629c6761b57ba","x":4658,"y":418,"z":-16465},{"kind":"egg","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"17c23d22b76ef248b91921c3708cf031","x":-11120,"y":-4288,"z":-17685},{"kind":"egg","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"b1f47131fe939244a3250d2505da51a6","x":-250,"y":-7233,"z":-17542},{"kind":"egg","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"6105622565564d48971b0faacdc2b6d7","x":-12350,"y":12662,"z":-16867},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"bfc90f386f0e3348a210b55366a43630","x":-12885,"y":-6070,"z":-17502},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"4f98a48ce9de3d4684ad2ba98ac9a073","x":-8382,"y":-6854,"z":-18594},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"689c984e377b4e43a7ed4fc787ce23f6","x":-35377,"y":5206,"z":-15746},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"931878b9d0cf7146a7c86eaa37c91039","x":-25953,"y":-1501,"z":-10240},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"7a3d26a981162e4aadc58827ead05d2c","x":-13597,"y":-4071,"z":-15914},{"kind":"skull","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"66c7aecc4e62ff438cd4cea80e034f44","x":-12331,"y":-14427,"z":-13951},{"kind":"module","map":"780_SZ_Depths","region":"Verdant Hollow","guid":"f7b9dd534c0dfb4b8c3239c2aaf0d6ee","x":-14615,"y":-14536,"z":-15736,"n":9},{"kind":"egg","map":"790_SG","region":"Petrified Garden","guid":"6fb7d33efc45234ab1198746a3c80ebb","x":9815,"y":-13269,"z":-13961},{"kind":"skull","map":"790_SG","region":"Petrified Garden","guid":"1d215f2140e99a4ebbe7649ff1cfd32a","x":10601,"y":-18116,"z":-13397},{"kind":"skull","map":"800_FinalZone","region":"Final zone","guid":"5c7c1ba7bca77047b44d5f12cbdb12f0","x":5667,"y":-25731,"z":-33390}];
+const LEVELS = {"100_GR":{"file":"maps/levels/100_GR.webp","bbox":[-4442.5,-13499.0,25066.0,19364.7],"w":1796,"h":2000,"zmin":-2525,"zmax":8402,"water":false},"130_GR_outerisles":{"file":"maps/levels/130_GR_outerisles.webp","bbox":[-27987.0,3449.9,135.3,27338.3],"w":2000,"h":1699,"zmin":-8676,"zmax":4284,"water":false},"140_GR_ShopIsleOnly":{"file":"maps/levels/140_GR_ShopIsleOnly.webp","bbox":[3300.0,42700.0,8300.0,47700.0],"w":2000,"h":2000,"zmin":2372,"zmax":3035,"water":false},"200_AQ":{"file":"maps/levels/200_AQ.webp","bbox":[-24682.4,-30109.2,6514.1,3292.7],"w":1868,"h":2000,"zmin":-2484,"zmax":3825,"water":false},"210_AQ_underground":{"file":"maps/levels/210_AQ_underground.webp","bbox":[-18837.6,-38555.9,5853.6,-3341.6],"w":1402,"h":2000,"zmin":-5201,"zmax":2393,"water":false},"300_LIB":{"file":"maps/levels/300_LIB.webp","bbox":[18488.7,-8046.5,34259.3,8367.2],"w":1922,"h":2000,"zmin":-1215,"zmax":16361,"water":false},"310_LIB_exterior":{"file":"maps/levels/310_LIB_exterior.webp","bbox":[16338.2,-9576.2,35449.7,9031.1],"w":2000,"h":1947,"zmin":-1427,"zmax":21012,"water":false},"320_LIB_basement":{"file":"maps/levels/320_LIB_basement.webp","bbox":[19217.2,-8478.6,33592.1,8276.2],"w":1716,"h":2000,"zmin":-4508,"zmax":3259,"water":false},"400_MAUS_entrance":{"file":"maps/levels/400_MAUS_entrance.webp","bbox":[-3500.0,1277.0,17179.8,28468.3],"w":1521,"h":2000,"zmin":-7615,"zmax":7765,"water":true},"420_MAUS_mid":{"file":"maps/levels/420_MAUS_mid.webp","bbox":[-11578.2,9610.6,11376.4,33056.1],"w":1958,"h":2000,"zmin":-9656,"zmax":679,"water":true},"450_MAUS_darkmaze":{"file":"maps/levels/450_MAUS_darkmaze.webp","bbox":[-23253.2,-3589.5,4127.3,45539.0],"w":1115,"h":2000,"zmin":-11681,"zmax":2304,"water":false},"500_AUT":{"file":"maps/levels/500_AUT.webp","bbox":[-89363.0,-9294.4,-7493.0,75967.6],"w":1920,"h":2000,"zmin":-42788,"zmax":-23982,"water":true},"510_AUT_droptunnel":{"file":"maps/levels/510_AUT_droptunnel.webp","bbox":[-32794.3,13537.0,-14427.9,28616.5],"w":2000,"h":1642,"zmin":-37958,"zmax":-4678,"water":true},"600_Castle":{"file":"maps/levels/600_Castle.webp","bbox":[-71575.4,-59963.5,-29522.0,-13171.8],"w":1797,"h":2000,"zmin":-44022,"zmax":-27049,"water":true},"610_Castle_Ext":{"file":"maps/levels/610_Castle_Ext.webp","bbox":[-74612.4,-39752.2,-27900.1,-9289.9],"w":2000,"h":1304,"zmin":-39263,"zmax":-26113,"water":false},"700_SZ_GR":{"file":"maps/levels/700_SZ_GR.webp","bbox":[5751.2,-8757.7,21764.0,9629.4],"w":1742,"h":2000,"zmin":-4929,"zmax":4325,"water":true},"710_SZ_AQ":{"file":"maps/levels/710_SZ_AQ.webp","bbox":[-16974.8,-41878.1,-4403.5,-23850.0],"w":1395,"h":2000,"zmin":-10274,"zmax":-668,"water":false},"720_SZ_LIB":{"file":"maps/levels/720_SZ_LIB.webp","bbox":[17973.7,-6641.7,31199.4,6729.7],"w":1978,"h":2000,"zmin":-7808,"zmax":2435,"water":false},"730_HOD":{"file":"maps/levels/730_HOD.webp","bbox":[-3500.0,-3500.0,22778.8,21248.9],"w":2000,"h":1884,"zmin":-12020,"zmax":2446,"water":true},"740_SZ_Prison":{"file":"maps/levels/740_SZ_Prison.webp","bbox":[8556.5,-7486.9,31865.7,18584.0],"w":1788,"h":2000,"zmin":-11079,"zmax":-2809,"water":true},"750_SZ_MAUS2":{"file":"maps/levels/750_SZ_MAUS2.webp","bbox":[-13210.5,2383.7,1799.8,19743.2],"w":1729,"h":2000,"zmin":-15664,"zmax":-2676,"water":false},"760_Dekanima":{"file":"maps/levels/760_Dekanima.webp","bbox":[-6078.1,-2625.2,8870.5,16799.7],"w":1539,"h":2000,"zmin":-20071,"zmax":-1505,"water":false},"760_SZ_AUT":{"file":"maps/levels/760_SZ_AUT.webp","bbox":[-9937.9,2258.9,11006.4,28964.6],"w":1569,"h":2000,"zmin":-39881,"zmax":-3690,"water":false},"770_SZ_Swamp":{"file":"maps/levels/770_SZ_Swamp.webp","bbox":[-36608.9,-40346.0,2640.7,-9263.0],"w":2000,"h":1584,"zmin":-18854,"zmax":-10267,"water":true},"775_JigekiTemple":{"file":"maps/levels/775_JigekiTemple.webp","bbox":[-22886.3,-22488.8,3500.0,3500.0],"w":2000,"h":1970,"zmin":-17624,"zmax":2396,"water":false},"780_SZ_Depths":{"file":"maps/levels/780_SZ_Depths.webp","bbox":[-42917.8,-20275.7,15574.8,16212.8],"w":2000,"h":1248,"zmin":-20133,"zmax":-7970,"water":false},"790_SG":{"file":"maps/levels/790_SG.webp","bbox":[-10263.0,-34750.6,29155.4,-8641.9],"w":2000,"h":1325,"zmin":-17143,"zmax":-10769,"water":true},"800_FinalZone":{"file":"maps/levels/800_FinalZone.webp","bbox":[-32126.0,-48273.2,9167.0,4543.7],"w":1564,"h":2000,"zmin":-33368,"zmax":2334,"water":true}};
+const LEVEL_NAME = {"100_GR":"Main island","130_GR_outerisles":"Outer isles","140_GR_ShopIsleOnly":"Shop isle","200_AQ":"Temple","210_AQ_underground":"Underground","300_LIB":"Interior","310_LIB_exterior":"Exterior","320_LIB_basement":"Basement","400_MAUS_entrance":"Entrance","420_MAUS_mid":"Middle","450_MAUS_darkmaze":"Dark maze","500_AUT":"Main","510_AUT_droptunnel":"Drop tunnel","600_Castle":"Interior","610_Castle_Ext":"Exterior","700_SZ_GR":"Below the Isle","710_SZ_AQ":"Off Obmuer Temple","720_SZ_LIB":"Off the Tower","730_HOD":"Shrine hall","750_SZ_MAUS2":"Off the Mausoleum","740_SZ_Prison":"Dungeon","760_SZ_AUT":"Record of Sin","760_Dekanima":"Dekanima","770_SZ_Swamp":"Cavern","775_JigekiTemple":"Jigeki Temple","780_SZ_Depths":"Hollow","790_SG":"Garden","800_FinalZone":"Skull door"};
+const AREA_ORDER = ["Isle of Neasied","Obmuer Temple","Tower of Knowledge","Deimpo Mausoleum","Hidden zones","Forgotten Dungeon","Verdant Hollow","Rotting Cavern","Petrified Garden","Record of Sin","Ancient World","Siraatsu Castle","Final zone"];
+const ISO = {"file":"maps/world-iso.webp","w":3000,"h":7781,"xlim":[-126603.64544714462,52482.6892048825],"ylim":[-70417.51653320312,394176.54446767573],"gap":30000.0,"zs":0.6,"rank":{"Isle of Neasied":11,"Obmuer Temple":10,"Tower of Knowledge":12,"Deimpo Mausoleum":8,"Ancient World":0,"Siraatsu Castle":1,"Rotting Cavern":4,"Verdant Hollow":5,"Forgotten Dungeon":7,"Record of Sin":3,"Petrified Garden":6,"Hidden zones":9,"Final zone":2},"med":{"Isle of Neasied":2470.503173828125,"Obmuer Temple":-2999.735595703125,"Tower of Knowledge":5343.888671875,"Deimpo Mausoleum":-6432.1552734375,"Ancient World":-34477.69921875,"Siraatsu Castle":-35300.12109375,"Rotting Cavern":-15764.080078125,"Verdant Hollow":-15166.9853515625,"Forgotten Dungeon":-7049.54443359375,"Record of Sin":-18800.48828125,"Petrified Garden":-14053.5751953125,"Hidden zones":-3457.517333984375,"Final zone":-31255.064453125}};
+const AREAS = AREA_ORDER;
+const levelsOf = a => Object.keys(LEVELS).filter(lv => ITEMS.some(i => i.map === lv && i.region === a));
+const KIND = { egg: 'Orbewa Egg', skull: 'Silver Skull', module: 'Data Module' };
+let results = null;     // items with .missing after a save is loaded
+let currentArea = null;
+let currentLevel = null;
+let highlight = null;
+
+const $ = id => document.getElementById(id);
+const status = (msg, err) => { $('status').textContent = msg; $('status').className = 'status' + (err ? ' err' : ''); };
+const fmtH = z => (z / 100).toFixed(0) + ' m';
+const itemName = it => KIND[it.kind] + (it.kind === 'module' ? ' #' + it.n : '');
+const list = () => results || ITEMS;
+
+// ---------- pan/zoom viewer ----------
+function makeViewer(el, imgSrc, w, h) {
+  el.innerHTML = '';
+  const stage = document.createElement('div'); stage.className = 'stage';
+  stage.style.width = w + 'px'; stage.style.height = h + 'px';
+  const img = document.createElement('img'); img.src = imgSrc; img.alt = ''; img.draggable = false;
+  stage.appendChild(img); el.appendChild(stage);
+  const v = { el, stage, w, h, s: 1, x: 0, y: 0 };
+  v.apply = () => {
+    stage.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`;
+    stage.style.setProperty('--inv', (1 / v.s).toFixed(4));
+  };
+  v.fit = () => {
+    const W = el.clientWidth, H = el.clientHeight;
+    v.s = Math.min(W / w, H / h); v.x = (W - w * v.s) / 2; v.y = (H - h * v.s) / 2; v.apply();
+  };
+  v.zoom = f => { const W = el.clientWidth / 2, H = el.clientHeight / 2, ns = Math.min(Math.max(v.s * f, 0.05), 8); v.x = W - (W - v.x) * ns / v.s; v.y = H - (H - v.y) * ns / v.s; v.s = ns; v.apply(); };
+  v.focus = (px, py, scale) => {
+    const W = el.clientWidth, H = el.clientHeight;
+    v.s = scale; v.x = W / 2 - px * v.s; v.y = H / 2 - py * v.s; v.apply();
+  };
+  el.onwheel = e => {
+    e.preventDefault();
+    const r = el.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = Math.exp(-e.deltaY * 0.0015), ns = Math.min(Math.max(v.s * f, 0.05), 8);
+    v.x = mx - (mx - v.x) * ns / v.s; v.y = my - (my - v.y) * ns / v.s; v.s = ns; v.apply();
+  };
+  let drag = null;
+  el.onpointerdown = e => { if (e.target.closest('.pin')) return; drag = { x: e.clientX - v.x, y: e.clientY - v.y }; el.classList.add('grab'); el.setPointerCapture(e.pointerId); };
+  el.onpointermove = e => { if (!drag) return; v.x = e.clientX - drag.x; v.y = e.clientY - drag.y; v.apply(); };
+  el.onpointerup = el.onpointercancel = () => { drag = null; el.classList.remove('grab'); };
+  img.onload = () => v.fit();
+  setTimeout(v.fit, 0);
+  return v;
+}
+
+function addPin(v, px, py, it, onClick) {
+  const p = document.createElement('div');
+  const state = results ? (it.missing ? 'miss' : 'have') : 'unknown';
+  p.className = `pin ${state} ${it.kind}` + (highlight === it.guid ? ' hl' : '');
+  p.style.left = px + 'px'; p.style.top = py + 'px';
+  p.appendChild(document.createElement('i'));
+  p.onmouseenter = e => showTip(e, it);
+  p.onmousemove = moveTip;
+  p.onmouseleave = hideTip;
+  if (onClick) { p.style.cursor = 'pointer'; p.onclick = () => onClick(it); }
+  if (state === 'miss') p.style.zIndex = 3;
+  v.stage.appendChild(p);
+}
+function showTip(e, it) {
+  const s = results ? (it.missing ? '<b style="color:#ff8a8a">Missing</b>' : '<span class="done">Collected</span>') : '';
+  $('tip').innerHTML = `<b>${itemName(it)}</b> ${s}<br>${it.region}<br><span class="muted">${LEVEL_NAME[it.map]} · height ${fmtH(it.z)}<br>x ${it.x}, y ${it.y}</span>`;
+  $('tip').style.display = 'block'; moveTip(e);
+}
+function moveTip(e) { const t = $('tip'); t.style.left = (e.clientX + 14) + 'px'; t.style.top = (e.clientY + 14) + 'px'; }
+function hideTip() { $('tip').style.display = 'none'; }
+
+// ---------- area maps ----------
+let areaV = null;
+function areaPx(m, it) {
+  const [x0, y0, x1, y1] = m.bbox;
+  return [(it.x - x0) / (x1 - x0) * m.w, (it.y - y0) / (y1 - y0) * m.h];
+}
+function renderTabs() {
+  $('tabs').innerHTML = '';
+  for (const a of AREAS) {
+    const b = document.createElement('button'); b.className = 'tab' + (a === currentArea ? ' on' : '');
+    const n = results ? results.filter(i => i.region === a && i.missing).length : null;
+    b.innerHTML = a + (n === null ? '' : `<span class="badge${n ? '' : ' zero'}">${n}</span>`);
+    b.onclick = () => showArea(a);
+    $('tabs').appendChild(b);
+  }
+}
+function showArea(a, focusItem) {
+  currentArea = a; renderTabs();
+  const lvs = levelsOf(a);
+  let lv = focusItem ? focusItem.map : null;
+  if (!lv && results) lv = lvs.find(l => results.some(i => i.map === l && i.missing));
+  showLevel(lv || lvs[0], focusItem);
+}
+function renderSubtabs() {
+  const lvs = levelsOf(currentArea), el = $('subtabs'); el.innerHTML = '';
+  if (lvs.length < 2) return;
+  for (const lv of lvs) {
+    const b = document.createElement('button'); b.className = 'tab' + (lv === currentLevel ? ' on' : '');
+    const n = results ? results.filter(i => i.map === lv && i.missing).length : null;
+    b.innerHTML = LEVEL_NAME[lv] + (n === null ? '' : `<span class="badge${n ? '' : ' zero'}">${n}</span>`);
+    b.onclick = () => showLevel(lv);
+    el.appendChild(b);
+  }
+}
+function showLevel(lv, focusItem) {
+  currentLevel = lv; renderSubtabs();
+  const m = LEVELS[lv];
+  areaV = makeViewer($('areaViewer'), m.file, m.w, m.h);
+  const showHave = $('showHave').checked;
+  for (const it of list().filter(i => i.map === lv)) {
+    if (results && !it.missing && !showHave) continue;
+    const [px, py] = areaPx(m, it); addPin(areaV, px, py, it);
+  }
+  $('areaLegend').innerHTML =
+    `<span><span class="dot k-egg"></span>Egg</span><span><span class="dot k-skull"></span>Skull</span><span><span class="dot k-module"></span>Data module</span>` +
+    `<span>Big pulsing pin = missing, small outline = collected</span>` +
+    `<span>Floor height ${fmtH(m.zmin)}<span class="grad"></span>${fmtH(m.zmax)}</span>` +
+    (m.water ? '<span><span class="water"></span>Water</span>' : '') +
+    `<span class="muted">Level file: ${lv}</span>`;
+  if (focusItem) {
+    const [px, py] = areaPx(m, focusItem);
+    setTimeout(() => { areaV.fit(); areaV.focus(px, py, areaV.s * 1.8); }, 30);
+  }
+}
+$('showHave').onchange = () => showLevel(currentLevel);
+$('resetArea').onclick = () => areaV && areaV.fit();
+
+// ---------- world isometric ----------
+let worldV = null;
+function isoPx(it) {
+  const C30 = Math.cos(Math.PI / 6), S30 = Math.sin(Math.PI / 6);
+  const zd = ISO.rank[it.region] * ISO.gap + (it.z - ISO.med[it.region]) * ISO.zs;
+  const sx = (it.x + it.y) * C30, sy = (it.x - it.y) * S30 + zd;
+  return [(sx - ISO.xlim[0]) / (ISO.xlim[1] - ISO.xlim[0]) * ISO.w, (ISO.ylim[1] - sy) / (ISO.ylim[1] - ISO.ylim[0]) * ISO.h];
+}
+function showWorld() {
+  worldV = makeViewer($('worldViewer'), ISO.file, ISO.w, ISO.h);
+  const items = results ? results.filter(i => i.missing) : ITEMS;
+  for (const it of items) { const [px, py] = isoPx(it); addPin(worldV, px, py, it, openItem); }
+}
+$('zoomInA').onclick = () => areaV && areaV.zoom(1.4);
+$('zoomOutA').onclick = () => areaV && areaV.zoom(1 / 1.4);
+$('zoomInW').onclick = () => worldV && worldV.zoom(1.4);
+$('zoomOutW').onclick = () => worldV && worldV.zoom(1 / 1.4);
+$('resetWorld').onclick = () => worldV && worldV.fit();
+
+function openItem(it) {
+  highlight = it.guid; showArea(it.region, it);
+  $('areaViewer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ---------- results ----------
+function renderResults(fileName) {
+  const by = k => results.filter(i => i.kind === k);
+  const c = results.counters || {};
+  const card = (k, total, extra) => {
+    const have = by(k).filter(i => !i.missing).length;
+    return `<div class="card"><div class="lab">${KIND[k]}s found</div><div class="big ${have === total ? 'done' : ''}">${have} / ${total}</div><div class="note">${extra}</div></div>`;
+  };
+  const v = x => (x === null || x === undefined) ? '?' : x;
+  $('cards').innerHTML =
+    card('egg', 50, `Delivered to Erma: ${v(c.eggsDelivered)} · carrying: ${v(c.eggsCarried)}`) +
+    card('skull', 69, `Turned in at the skull door: ${v(c.skullsTurnedIn)} · carrying: ${v(c.skullsCarried)}`) +
+    card('module', 10, `Given to Ossi: ${v(c.modulesGiven)}`);
+  const miss = results.filter(i => i.missing).sort((a, b) => a.region.localeCompare(b.region) || a.kind.localeCompare(b.kind));
+  $('missingNote').textContent = miss.length ? `${miss.length} item${miss.length > 1 ? 's' : ''} not collected in ${fileName}. Click a row to show it on the map.` : `Nothing missing in ${fileName}. Every egg, skull and data module has been picked up.`;
+  $('missingBody').innerHTML = '';
+  for (const it of miss) {
+    const tr = document.createElement('tr'); tr.className = 'row';
+    tr.innerHTML = `<td><span class="dot k-${it.kind}"></span>${itemName(it)}</td><td>${it.region}</td><td>${fmtH(it.z)}</td><td class="muted">${LEVEL_NAME[it.map]}</td>`;
+    tr.onclick = () => openItem(it);
+    $('missingBody').appendChild(tr);
+  }
+  $('summary').classList.remove('hidden'); $('missing').classList.remove('hidden');
+  const first = miss[0];
+  showArea(first ? first.region : AREAS[0], first);
+  showWorld();
+}
+
+async function loadFiles(files) {
+  files = [...files];
+  if (!files.length) return;
+  files.sort((a, b) => (b.name === 'World0.sav') - (a.name === 'World0.sav') || (/^World0/.test(b.name)) - (/^World0/.test(a.name)));
+  let lastErr = null;
+  for (const f of files) {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const r = QD.analyze(bytes, ITEMS);
+    if (r.error) { lastErr = `${f.name}: ${r.error}`; continue; }
+    results = r.items; results.counters = r.counters; highlight = null;
+    status(`Loaded ${f.name}` + (files.length > 1 ? ` (picked from ${files.length} files)` : '') + '.');
+    renderResults(f.name);
+    return;
+  }
+  status(lastErr || 'Could not read that file.', true);
+}
+$('file').onchange = e => loadFiles(e.target.files);
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => loadFiles(e.dataTransfer.files));
+
+// Before a save is loaded, show every item location.
+showArea(AREAS[0]);
+showWorld();
+window.addEventListener('resize', () => { areaV && areaV.fit(); worldV && worldV.fit(); });
+</script>
+</body>
+</html>
