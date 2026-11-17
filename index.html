@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M8 1l6 7-6 7-6-7z%22 fill=%22%23ffa31a%22/%3E%3C/svg%3E">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
 <title>Queen's Domain – Missing Collectibles Finder</title>
 <style>
   :root {
@@ -11,6 +12,15 @@
     --egg: #ff3b3b; --skull: #ffa31a; --module: #39d0ff; --ok: #6fdc8c; --accent: #c9a2ff;
   }
   * { box-sizing: border-box; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-right: 6px; }
+  .seg button { border: 0; border-radius: 0; margin: 0; }
+  .seg button.on { background: var(--accent); color: #111; font-weight: 600; }
+  .only3d { display: none; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .mode3d .only3d { display: inline-flex; }
+  .mode3d .only2d { display: none !important; }
+  .only3d input[type=range] { width: 160px; accent-color: var(--accent); }
+  #area3d { position: relative; overflow: hidden; border-radius: 10px; background: #0b0d10; border: 1px solid var(--line); }
+  #area3d .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); pointer-events: none; }
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   a { color: var(--accent); }
   header { padding: 28px 24px 8px; max-width: 1200px; margin: 0 auto; }
@@ -127,12 +137,20 @@
     <h2>Area map</h2>
     <div class="tabs" id="tabs"></div>
     <div class="subtabs" id="subtabs"></div>
-    <div class="toolbar">
+    <div class="toolbar" id="areaToolbar">
+      <span class="seg"><button id="mode2d" class="on">2D map</button><button id="mode3d">3D</button></span>
       <button id="zoomInA">+</button><button id="zoomOutA">−</button><button id="resetArea">Reset view</button>
-      <span>Scroll to zoom, drag to pan. Hover a pin for details.</span>
+      <span class="only2d">Scroll to zoom, drag to pan. Hover a pin for details.</span>
+      <span class="only3d">Drag to rotate, right-drag to pan, scroll to zoom.</span>
+    </div>
+    <div class="toolbar only3d" id="tools3d">
+      <label><input type="checkbox" id="walls3d" checked> Walls</label>
+      <label><input type="checkbox" id="xray3d" checked> Pins visible through walls</label>
+      <label>Cut-away height <input type="range" id="clip3d" min="0" max="1000" value="1000"> <span id="clipVal"></span></label>
     </div>
     <div class="layers" id="layersA"></div>
-    <div class="viewer" id="areaViewer" style="height:72vh"></div>
+    <div class="viewer only2d" id="areaViewer" style="height:72vh"></div>
+    <div class="only3d" id="area3d" style="height:72vh;width:100%"><div class="loading" id="load3d">Loading 3D model…</div></div>
     <div class="legend" id="areaLegend"></div>
   </section>
 
@@ -265,15 +283,18 @@ function addPoi(v, px, py, p, onClick) {
   el.className = `pin ${p.kind === 'teleporter' ? 'tele' : 'save'}` + (p.have === false ? ' poi-off' : '');
   el.style.left = px + 'px'; el.style.top = py + 'px'; el.style.zIndex = 2;
   el.appendChild(document.createElement('i'));
-  el.onmouseenter = e => {
+  el.onmouseenter = e => poiTip(e, p);
+  el.onmousemove = moveTip; el.onmouseleave = hideTip;
+  if (onClick) { el.style.cursor = 'pointer'; el.onclick = () => onClick(p); }
+  v.stage.appendChild(el);
+}
+function poiTip(e, p) {
+  {
     const st = p.have === true ? (p.kind === 'teleporter' ? '<span class="done">Unlocked</span>' : '<span class="done">Visited</span>')
              : p.have === false ? (p.kind === 'teleporter' ? '<b style="color:#ff8a8a">Not unlocked</b>' : '<b style="color:#ff8a8a">Not visited</b>') : '';
     $('tip').innerHTML = `<b>${p.kind === 'teleporter' ? 'Teleporter' : 'Save point: ' + p.label}</b> ${st}<br>${p.region} · ${LEVEL_NAME[p.map]}<br><span class="muted">Height ${fmtH(p.z)}</span>`;
     $('tip').style.display = 'block'; moveTip(e);
-  };
-  el.onmousemove = moveTip; el.onmouseleave = hideTip;
-  if (onClick) { el.style.cursor = 'pointer'; el.onclick = () => onClick(p); }
-  v.stage.appendChild(el);
+  }
 }
 function showTip(e, it) {
   const d = DONE[it.kind];
@@ -323,6 +344,20 @@ function renderSubtabs() {
 }
 function showLevel(lv, focusItem) {
   currentLevel = lv; renderSubtabs();
+  if (mode3d) { show3d(lv, focusItem); legend(lv); return; }
+  showLevel2d(lv, focusItem);
+}
+function legend(lv) {
+  const m = LEVELS[lv];
+  $('areaLegend').innerHTML =
+    `<span>Big pin = missing / not opened / not eaten, small outline = done, grey = not unlocked / visited, <span class="k-unique">★</span>= chest with unique items</span>` +
+    (mode3d ? '<span class="muted">3D colours: floors by height, walls grey, water purple/blue</span>' :
+    `<span>Floor height ${fmtH(m.zmin)}<span class="grad"></span>${fmtH(m.zmax)}</span>` +
+    (m.water ? '<span><span class="water"></span>Water</span>' : '')) +
+    `<span class="muted">Level file: ${lv}</span>`;
+}
+function showLevel2d(lv, focusItem) {
+  if (mode3d) return;
   const m = LEVELS[lv];
   areaV = makeViewer($('areaViewer'), m.file, m.w, m.h);
   const L = LAYERS.A;
@@ -334,20 +369,78 @@ function showLevel(lv, focusItem) {
     if (!L[p.kind]) continue;
     const [px, py] = areaPx(m, p); addPoi(areaV, px, py, p);
   }
-  $('areaLegend').innerHTML =
-    `<span>Big pulsing pin = missing / not opened / not eaten, small outline = done, grey = not unlocked / visited, <span class="k-unique">★</span>= chest with unique items</span>` +
-    `<span>Floor height ${fmtH(m.zmin)}<span class="grad"></span>${fmtH(m.zmax)}</span>` +
-    (m.water ? '<span><span class="water"></span>Water</span>' : '') +
-    `<span class="muted">Level file: ${lv}</span>`;
+  legend(lv);
   if (focusItem) {
     const [px, py] = areaPx(m, focusItem);
     setTimeout(() => { areaV.fit(); areaV.focus(px, py, areaV.s * 1.8); }, 30);
   }
 }
-renderLayers('layersA', LAYERS.A, () => showLevel(currentLevel));
+renderLayers('layersA', LAYERS.A, () => { if (mode3d && v3d && range3d) { v3d.setPins(pins3d(currentLevel)); clipLabel(); } showLevel2d(currentLevel); });
 renderLayers('layersW', LAYERS.W, () => showWorld());
 renderLayers('layersM', LAYERS.M, () => results && renderMissing());
-$('resetArea').onclick = () => areaV && areaV.fit();
+$('resetArea').onclick = () => mode3d ? (v3d && v3d.reset()) : (areaV && areaV.fit());
+
+// ---------- 3D area view (three.js, loaded on first use) ----------
+let mode3d = false, v3d = null, v3dPromise = null, range3d = null;
+function pins3d(lv) {
+  const L = LAYERS.A, out = [];
+  for (const it of list().filter(i => i.map === lv)) {
+    if (!shown(L, it) || (results && !it.missing && !L.have)) continue;
+    out.push({ x: it.x, y: it.y, z: it.z, kind: it.kind, unique: !!it.unique, item: it,
+      state: results ? (it.missing ? 'miss' : 'have') : 'unknown' });
+  }
+  for (const p of poiList().filter(p => p.map === lv)) {
+    if (!L[p.kind]) continue;
+    out.push({ x: p.x, y: p.y, z: p.z, kind: p.kind, item: p, state: p.have === false ? 'off' : 'on' });
+  }
+  return out;
+}
+function getViewer3d() {
+  if (!v3dPromise) v3dPromise = import('./viewer3d.js').then(mod => {
+    v3d = mod.createViewer($('area3d'), {
+      onHover: (it, e) => (it.kind === 'teleporter' || it.kind === 'save') ? poiTip(e, it) : showTip(e, it),
+      onLeave: hideTip
+    });
+    return v3d;
+  });
+  return v3dPromise;
+}
+function clipLabel() {
+  if (!range3d) return;
+  const t = +$('clip3d').value / 1000, y = range3d.minY + (range3d.maxY - range3d.minY + 1) * t;
+  $('clipVal').textContent = t >= 1 ? 'off' : (y).toFixed(0) + ' m';
+  v3d && v3d.setClipHeight(t >= 1 ? 1e6 : y);
+}
+async function show3d(lv, focusItem) {
+  $('load3d').style.display = 'flex'; $('load3d').textContent = 'Loading 3D model…';
+  try {
+    const v = await getViewer3d();
+    const r = await v.show(`maps/3d/${lv}.glb`, pins3d(lv), { walls: $('walls3d').checked });
+    if (lv !== currentLevel || !mode3d) return;
+    if (r) { range3d = r; $('clip3d').value = 1000; clipLabel(); }
+    $('load3d').style.display = 'none';
+    if (focusItem) {
+      // Cut away everything a few metres above the item so roofs and cave ceilings don't hide it.
+      const y = focusItem.z / 100 + 6, t = (y - range3d.minY) / (range3d.maxY - range3d.minY + 1);
+      if (t < 0.98) { $('clip3d').value = Math.max(0, Math.round(t * 1000)); clipLabel(); }
+      v.focus(focusItem, 60);
+    }
+  } catch (e) {
+    console.error(e); $('load3d').textContent = 'Could not load the 3D view (' + (e.message || e) + '). Your browser may not support WebGL.';
+  }
+}
+function setMode(three) {
+  mode3d = three; hideTip();
+  $('mode2d').classList.toggle('on', !three); $('mode3d').classList.toggle('on', three);
+  $('areaViewer').closest('section').classList.toggle('mode3d', three);
+  if (v3d) three ? v3d.resume() : v3d.pause();
+  showLevel(currentLevel, highlight ? list().find(i => i.guid === highlight) : null);
+}
+$('mode2d').onclick = () => mode3d && setMode(false);
+$('mode3d').onclick = () => !mode3d && setMode(true);
+$('walls3d').onchange = e => v3d && v3d.setWalls(e.target.checked);
+$('xray3d').onchange = e => v3d && v3d.setPinsThrough(e.target.checked);
+$('clip3d').oninput = clipLabel;
 
 // ---------- world isometric ----------
 let worldV = null;
@@ -366,8 +459,8 @@ function showWorld() {
     const [px, py] = isoPx(p); addPoi(worldV, px, py, p, openItem);
   }
 }
-$('zoomInA').onclick = () => areaV && areaV.zoom(1.4);
-$('zoomOutA').onclick = () => areaV && areaV.zoom(1 / 1.4);
+$('zoomInA').onclick = () => mode3d ? (v3d && v3d.zoom(1.4)) : (areaV && areaV.zoom(1.4));
+$('zoomOutA').onclick = () => mode3d ? (v3d && v3d.zoom(1 / 1.4)) : (areaV && areaV.zoom(1 / 1.4));
 $('zoomInW').onclick = () => worldV && worldV.zoom(1.4);
 $('zoomOutW').onclick = () => worldV && worldV.zoom(1 / 1.4);
 $('resetWorld').onclick = () => worldV && worldV.fit();
