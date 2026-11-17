@@ -9,18 +9,6 @@ treasures) are marked with a ★ and list their contents.
 
 The save file never leaves the browser; there is no server code.
 
-## Publish on GitHub Pages
-
-1. Create a new GitHub repository and upload everything in this folder
-   (`index.html`, `qd.js`, `viewer3d.js`, `.nojekyll`, `README.md` and the `maps/` and `vendor/` folders).
-2. In the repository go to **Settings → Pages**, set **Source** to *Deploy from a branch*,
-   pick the `main` branch and the `/ (root)` folder, and save.
-3. After a minute the page is live at `https://<your-user>.github.io/<repo-name>/`.
-
-You can also open `index.html` locally in a browser. The 2D maps work straight from the file;
-the 3D view needs the page served over HTTP (browsers block loading the models from `file://`),
-for example `python -m http.server` in this folder, then open `http://localhost:8000/`.
-
 ## 3D view
 
 The area map has a **2D map / 3D** switch. In 3D each level is a rotatable model (drag to rotate,
